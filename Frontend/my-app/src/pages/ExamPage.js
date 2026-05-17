@@ -60,6 +60,12 @@ const ExamPage = () => {
   const [cameraAllowed, setCameraAllowed] =
     useState(false);
 
+  const [cameraError, setCameraError] =
+    useState(null);
+
+  const [cameraModalOpen, setCameraModalOpen] =
+    useState(false);
+
   const [microphoneAllowed, setMicrophoneAllowed] =
     useState(false);
 
@@ -112,14 +118,27 @@ const ExamPage = () => {
   const requestCameraPermission =
     useCallback(async () => {
       try {
+        setCameraError(null);
+
         if (
           !navigator.mediaDevices ||
           !navigator.mediaDevices.getUserMedia
         ) {
-          toast.error(
-            'Browser not supported'
-          );
+          setCameraAllowed(false);
+          setCameraModalOpen(true);
+          setMicrophoneAllowed(false);
+          setMicMuted(false);
+          const msg = 'Browser not supported for camera.';
+          setCameraError(msg);
+          toast.error(msg);
           return false;
+        }
+
+        // Stop previous stream tracks (if any) before re-requesting
+        if (mediaStream) {
+          mediaStream
+            .getTracks()
+            .forEach(track => track.stop());
         }
 
         const stream =
@@ -132,30 +151,43 @@ const ExamPage = () => {
 
         setMediaStream(stream);
         setCameraAllowed(true);
+        setCameraModalOpen(false);
 
         // Mic will be requested only after explicit user action
         setMicrophoneAllowed(false);
         setMicMuted(false);
 
-        toast.success(
-          'Camera Enabled'
-        );
+        toast.success('Camera Enabled');
         return true;
       } catch (error) {
-        console.error(
-          'Camera Media Error:',
-          error
-        );
-
-        toast.error(
-          'Please allow camera permissions'
-        );
+        console.error('Camera Media Error:', error);
 
         setCameraAllowed(false);
         setMicrophoneAllowed(false);
+        setMicMuted(false);
+        setCameraModalOpen(true);
+
+        // Browser blocked permissions / NotAllowedError / NotFoundError
+        const name = error?.name;
+        let msg = 'Camera access is required to attend the exam.';
+
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+          msg = 'Camera permission was denied. Please enable camera access to continue.';
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          msg = 'No camera device found. Please connect a camera and try again.';
+        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+          msg = 'Unable to access the camera. It may be in use by another app.';
+        } else if (name === 'OverconstrainedError') {
+          msg = 'Requested camera constraints cannot be satisfied. Try a different camera.';
+        } else if (error?.message) {
+          msg = error.message;
+        }
+
+        setCameraError(msg);
+        toast.error(msg);
         return false;
       }
-    }, []);
+    }, [mediaStream]);
 
   const requestMicrophonePermission =
     useCallback(async () => {
@@ -360,14 +392,9 @@ const ExamPage = () => {
         const cameraGranted =
           await requestCameraPermission();
 
-        if (
-          cameraGranted
-        ) {
-          toast.success(
-            'Exam Loaded Successfully'
-          );
+        if (cameraGranted) {
+          toast.success('Exam Loaded Successfully');
         }
-
       } catch (error) {
         console.error(error);
 
@@ -720,7 +747,8 @@ const ExamPage = () => {
               opacity: 1,
               x: 0
             }}
-            className="bg-white rounded-2xl shadow-lg p-8"
+            className="bg-white rounded-2xl shadow-lg p-8 disabled:opacity-50"
+            aria-disabled={cameraModalOpen}
           >
             <p className="text-purple-600 font-semibold mb-2">
               Question{' '}
@@ -757,6 +785,8 @@ const ExamPage = () => {
                         ? 'border-purple-500 bg-purple-50'
                         : 'border-gray-200'
                     }`}
+                      disabled={cameraModalOpen}
+                      style={cameraModalOpen ? { pointerEvents: 'none' } : undefined}
                   >
                     <input
                       type="radio"
@@ -800,7 +830,7 @@ const ExamPage = () => {
                 }
                 disabled={
                   currentQuestion ===
-                  0
+                  0 || cameraModalOpen
                 }
                 className="px-5 py-2 bg-gray-300 rounded-lg disabled:opacity-50"
               >
@@ -822,7 +852,7 @@ const ExamPage = () => {
                 }
                 disabled={
                   currentQuestion ===
-                  questions.length - 1
+                  questions.length - 1 || cameraModalOpen
                 }
                 className="px-5 py-2 bg-purple-600 text-white rounded-lg disabled:opacity-50"
               >
@@ -837,14 +867,12 @@ const ExamPage = () => {
 
           <button
             onClick={() =>
-              setShowSubmitModal(
-                true
-              )
+              setShowSubmitModal(true)
             }
             disabled={
-              submitting
+              submitting || !cameraAllowed
             }
-            className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold"
+            className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold disabled:opacity-50"
           >
             <FiSend className="inline mr-2" />
 
@@ -998,6 +1026,56 @@ const ExamPage = () => {
         </div>
       </div>
 
+      {/* CAMERA REQUIRED MODAL */}
+
+      <AnimatePresence>
+        {cameraModalOpen && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="bg-white rounded-2xl p-8 max-w-lg w-full">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center font-bold">
+                  <FiVideo size={20} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">
+                    Camera access is required to attend the exam.
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    {cameraError
+                      ? cameraError
+                      : 'Please allow camera permissions to continue.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={
+                    () => requestCameraPermission()
+                  }
+                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold"
+                >
+                  Enable Camera
+                </button>
+
+                <button
+                  onClick={
+                    () => navigate('/student/dashboard')
+                  }
+                  className="flex-1 py-3 border rounded-lg"
+                >
+                  Leave Exam
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* SUBMIT MODAL */}
 
       <AnimatePresence>
@@ -1027,9 +1105,7 @@ const ExamPage = () => {
               <div className="flex gap-4">
                 <button
                   onClick={() =>
-                    setShowSubmitModal(
-                      false
-                    )
+                    setShowSubmitModal(false)
                   }
                   className="flex-1 py-3 border rounded-lg"
                 >
@@ -1037,10 +1113,9 @@ const ExamPage = () => {
                 </button>
 
                 <button
-                  onClick={
-                    confirmSubmit
-                  }
-                  className="flex-1 py-3 bg-green-600 text-white rounded-lg"
+                  onClick={confirmSubmit}
+                  disabled={!cameraAllowed}
+                  className="flex-1 py-3 bg-green-600 text-white rounded-lg disabled:opacity-50"
                 >
                   Submit
                 </button>
