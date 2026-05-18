@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiClipboard, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiAward, FiClock, FiCalendar, FiPlay, FiBookOpen } from 'react-icons/fi';
+import { FiClipboard, FiCheckCircle, FiAlertCircle, FiTrendingUp, FiAward, FiClock, FiCalendar, FiPlay, FiBookOpen, FiLogOut, FiUser } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 const StudentDashboard = () => {
   const [exams, setExams] = useState([]);
@@ -15,6 +16,7 @@ const StudentDashboard = () => {
     averageScore: 0
   });
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   // Update statistics based on exams and completed exams
   const updateStats = useCallback((examList, completedList) => {
@@ -79,6 +81,12 @@ const StudentDashboard = () => {
     updateStats(exams, []);
     toast.success('All exam records have been reset');
   }, [exams, updateStats]);
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const fetchExams = useCallback(async () => {
     try {
@@ -200,10 +208,37 @@ const StudentDashboard = () => {
       <div className="absolute top-0 left-0 w-full h-80 bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-700 rounded-b-3xl"></div>
       
       <div className="relative max-w-7xl mx-auto p-6">
+        {/* Header with Logout Button */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-            <h1 className="text-4xl font-bold text-white mb-2">Student Dashboard</h1>
-            <p className="text-white/90">Welcome back! You've completed {stats.completed} out of {stats.total} exams</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-4xl font-bold text-white mb-2">Student Dashboard</h1>
+                <p className="text-white/90">Welcome back, {user?.full_name || user?.email?.split('@')[0] || 'Student'}! You've completed {stats.completed} out of {stats.total} exams</p>
+              </div>
+              
+              {/* User Info & Logout Button */}
+              <div className="flex items-center gap-4">
+                <div className="hidden md:flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                    <FiUser className="text-white text-sm" />
+                  </div>
+                  <span className="text-white text-sm font-medium">
+                    {user?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Student'}
+                  </span>
+                </div>
+                
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 border border-white/30"
+                >
+                  <FiLogOut className="text-lg" />
+                  <span className="hidden sm:inline">Logout</span>
+                </motion.button>
+              </div>
+            </div>
           </div>
         </motion.div>
 
